@@ -20,11 +20,11 @@ from os import path
 try:
     from .tslib import tslib  # The file tslib.so contains the module 'tslib'.
 except ImportError:
-    print """
+    print("""
     ***Warning***: 'tslib' did not load correctly.  pyTurbSim
     will produce accurate results, but MUCH less efficiently.
     Consider compiling the tslib to improve performance.
-    """
+    """)
     tslib = None
 
 dbg = None

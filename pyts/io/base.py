@@ -27,6 +27,10 @@ def checkname(fname, extensions=[]):
     """
     if isfile(fname):
         return fname
+    try:
+        basestring
+    except NameError:
+        basestring = str
     if isinstance(extensions, basestring):
         # If extensions is a string make it a single-element list.
         extensions = [extensions]

@@ -4,7 +4,7 @@ function, which is useful for collecting information from available
 TurbSim input/output files.
 """
 
-import read
+import pyts.io.read
 
 readers = {'wnd': read.bladed,
            'bl': read.bladed,

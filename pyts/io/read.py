@@ -1,8 +1,8 @@
 from struct import unpack
-from .base import e, checkname, convname
+from pyts.io.base import e, checkname, convname
 import numpy as np
-from ..main import tsdata
-from ..base import tsGrid
+from pyts.main import tsdata
+from pyts.base import tsGrid
 from warnings import warn
 
 
@@ -94,7 +94,8 @@ def turbsim(fname):
     fname = checkname(fname, ['.bts'])
     u_scl = np.zeros(3, np.float32)
     u_off = np.zeros(3, np.float32)
-    fl = file(fname, 'rb')
+    # fl = file(fname, 'rb')
+    fl = open(fname, 'rb')
     (junk,
      n_z,
      n_y,

@@ -152,8 +152,8 @@ class stressObj(base.calcObj, base.gridProps):
         # stresses.  In the future it may make sense to adjust/modify the
         # stresses to make them valid?
         if ~(self.validity.all()):
-            print self.validity.shape
-            print self.validity
+            print(self.validity.shape)
+            print(self.validity)
             raise Exception('The input reynolds stresses are inconsistent.')
 
     def calc_phases(self, phases):

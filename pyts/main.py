@@ -8,14 +8,14 @@ typical user will want access to. For a more compact version of the
 PyTurbSim interface import the ./api.py package.
 
 """
-from .base import ts_complex, gridProps, dbg, np, statObj
-from .profModels.base import profModelBase, profObj
-from .specModels.base import specModelBase, specObj
-from .cohereModels.base import cohereModelBase, cohereObj, cohereUser
-from .stressModels.base import stressModelBase, stressObj
-from .phaseModels.api import randPhase
+from pyts.base import ts_complex, gridProps, dbg, np, statObj
+from pyts.profModels.base import profModelBase, profObj
+from pyts.specModels.base import specModelBase, specObj
+from pyts.cohereModels.base import cohereModelBase, cohereObj, cohereUser
+from pyts.stressModels.base import stressModelBase, stressObj
+from pyts.phaseModels.api import randPhase
 import _version as ver
-from .io import write
+from pyts.io import write
 from numpy import random
 from numpy import ulonglong
 from numpy.fft import irfft
