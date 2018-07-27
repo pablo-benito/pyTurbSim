@@ -1,0 +1,100 @@
+#! /bin/env python3
+import argparse
+
+import numpy as np
+import sys
+from tvtk.api import tvtk, write_data
+import h5py as h5
+import os
+"""
+see
+http://lkilcher.github.io/pyTurbSim/api/pyts.html?highlight=tsdata#pyts.main.tsdata
+and
+http://lkilcher.github.io/pyTurbSim/api/pyts.html?highlight=tsdata#pyts.base.gridProps
+"""
+# Disable
+def blockPrint():
+    sys.stdout = open(os.devnull, 'w')
+
+# Restore
+def enablePrint():
+    sys.stdout = sys.__stdout__
+
+def read_input(input_file):
+    d = dict()
+    with open(input_file) as f:
+        for line in f:
+            try:
+                key = line.split()[1]
+                val = line.split()[0]
+            except IndexError:
+                continue
+            d[key] = val
+    return d
+
+parser = argparse.ArgumentParser(prog='bts2h5', description=
+"""This script converts a turbsim .btl file into a compressed hdf5 file.\n
+Paraview output is also supported.\n
+Alfonso del Carre. \n
+Imperial College London 2018""")
+parser.add_argument('filename', help='path to the bts file to be converted', type=str)
+parser.add_argument('-p', '--paraview', help='enables Paraview output', action='store_true')
+args = parser.parse_args()
+
+filename = os.path.splitext(args.filename)[0]
+
+blockPrint()
+sys.path.append('/home/ad214/Code/pyTurbSim')
+import pyts.io.read as tsread
+enablePrint()
+data = tsread.turbsim(filename + '.btl')
+input_data = read_input(filename + '.inp')
+
+# velocity matrix
+velocity = data.utotal
+# time vector
+time = data.time
+# u_inf
+u_inf = float(input_data['URef'])
+ref_height = float(input_data['RefHt'])
+
+if args.paraview:
+    xx = time*u_inf
+    # grid
+    y, z, x = np.meshgrid(data.grid.y, data.grid.z, xx)
+    # import pdb; pdb.set_trace()
+    points = np.zeros((y.size, 3))
+    out_velocity = np.zeros((y.size, 3))
+    counter = 0
+    for i in range(y.shape[2]):
+        for j in range(y.shape[0]):
+            for k in range(y.shape[1]):
+                points[counter, :] = [x[j, k, i], y[j, k, i], z[j, k, i]]
+                out_velocity[counter, :] = velocity[:, j, k, i] - [u_inf, 0, 0]
+                counter += 1
+    sg = tvtk.StructuredGrid(dimensions=x.shape, points=points)
+    sg.point_data.vectors = out_velocity
+    sg.point_data.vectors.name = 'velocity'
+    write_data(sg, filename)
+
+with h5.File(filename + '.h5', 'w') as f:
+    # time vector
+    dset = f.create_dataset("time", data=time)
+    dset.attrs['unit'] = 's'
+    # dimensions
+    dimensions = np.array(velocity.shape)
+    dset = f.create_dataset('dimensions', data=dimensions)
+    dset.attrs['variables'] = 'dim, y, z, t'
+    # grid
+    dset = f.create_dataset('y_grid', data=data.grid.y)
+    dset.attrs['unit'] = 'm'
+    dset = f.create_dataset('z_grid', data=data.grid.z)
+    dset.attrs['unit'] = 'm'
+    # data group
+    datagroup = f.create_group('data')
+    # velocity
+    dset = datagroup.create_dataset('velocity', data=velocity, compression='gzip')
+    dset.attrs['unit'] = 'm/s'
+    # uhub
+    dset = f.create_dataset('u_inf', data=u_inf)
+    dset = f.create_dataset('ref_height', data=ref_height)
