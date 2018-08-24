@@ -50,7 +50,7 @@ template = InputFormatter(
 # This creates the mapping of line-numbers to variables, based on the
 # input-file template. It is used in the read function.
 inputfile_form = dict()
-for idx, ln in enumerate(template.template.split('\n')):
+for idx, ln in enumerate(template.template.decode('utf-8').split('\n')):
     if ln.startswith('{'):
         nm = ln[1:].split('!')[0].split(':')[0]
         inputfile_form[idx] = nm
@@ -137,7 +137,7 @@ def read(fname):
             if fl in fls:
                 break
         out['psd'] = readInPSD(fname.rpartition('/')[0] + '/' + fl)
-    for ky, val in out.iteritems():
+    for ky, val in out.items():
         if isinstance(val, string_type) and val == 'default':
             out[ky] = None
     out.__original__ = deepcopy(out)
@@ -150,6 +150,9 @@ def _readInputLine(line):
     correct 'type' (e.g. int, float, bool, str).
     """
     types = [np.int32, np.float32, bool, str]
+    line = line.strip()
+    if line == '':
+        return None
     if line[0] == '"':
         val = line.split('"')[1]
     elif line[0] == "'":

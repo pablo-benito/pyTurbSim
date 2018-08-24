@@ -1,4 +1,4 @@
-#! /bin/env python3
+#! /usr/bin/env python3
 import argparse
 
 import numpy as np
@@ -32,36 +32,101 @@ def read_input(input_file):
             d[key] = val
     return d
 
+def reduce_4dmatrix(mat):
+    new_mat = mat[:, ::2, ::2, ::2].copy()
+    return new_mat
+
+def reduce_vector(vec):
+    new_vec = vec[::2].copy()
+    return new_vec
+
 parser = argparse.ArgumentParser(prog='bts2h5', description=
 """This script converts a turbsim .btl file into a compressed hdf5 file.\n
 Paraview output is also supported.\n
 Alfonso del Carre. \n
 Imperial College London 2018""")
 parser.add_argument('filename', help='path to the bts file to be converted', type=str)
+parser.add_argument('-o', '--output', help='output file path and name (extension will be disregarded)', type=str, default='', const='', nargs='?')
 parser.add_argument('-p', '--paraview', help='enables Paraview output', action='store_true')
+parser.add_argument('--output_profile', help='plot in matplotlib the average velocity profile', action='store_true')
+parser.add_argument('-c', '--coarsen', help='coarsen the mesh by a factor', type=int, default=0, const=0, nargs='?')
+# parser.add_argument('-s', '--scale', help='scale the velocity field based on mean velocity', action='store_true')
 args = parser.parse_args()
 
 filename = os.path.splitext(args.filename)[0]
+if not args.output == '':
+    out_filename = os.path.splitext(args.output)[0]
+else:
+    out_filename = filename
 
 blockPrint()
-sys.path.append('/home/ad214/Code/pyTurbSim')
+#TODO generalise
+# sys.path.append('/home/ad214/Desktop/untitled\ folder/pyTurbSim')
 import pyts.io.read as tsread
 enablePrint()
+print('Reading btl file...', filename + '.btl')
 data = tsread.turbsim(filename + '.btl')
+print('\tOK')
+print('Reading inp file...', filename + '.inp')
 input_data = read_input(filename + '.inp')
+print('\tOK')
 
 # velocity matrix
 velocity = data.utotal
 # time vector
 time = data.time
+dt = data.time[1] - data.time[0]
 # u_inf
 u_inf = float(input_data['URef'])
 ref_height = float(input_data['RefHt'])
 
+y_grid = data.grid.y
+z_grid = data.grid.z
+
+# calculate average field
+if args.output_profile:
+    import matplotlib.pyplot as plt
+    nz = len(z_grid)
+    average_field = np.zeros((nz, 3))
+    for k in range(nz):
+        for i_dim in range(3):
+            average_field[k, i_dim] = np.average(velocity[i_dim, k, :, :])
+
+    plt.figure()
+    colours = ['k', 'r', 'b']
+    for i_dim in range(3):
+        plt.plot(average_field[:, i_dim], z_grid, colours[i_dim])
+    plt.title('Average velocity profile')
+    plt.legend(('u', 'v', 'w'), loc='upper center')
+    plt.xlabel('velocity [m/s]')
+    plt.ylabel('height [m]')
+    plt.grid(True)
+    plt.draw()
+
+if args.coarsen:
+    for i_coarse in range(args.coarsen):
+        print('Coarsening mesh... ',  str(i_coarse + 1))
+        time = reduce_vector(time)
+        y_grid = reduce_vector(y_grid)
+        z_grid = reduce_vector(z_grid)
+        velocity = reduce_4dmatrix(velocity)
+        print('Dimensions: ', velocity.shape)
+
+# # convect the grid as a function of the average profile
+# if args.scale:
+#     xx = time*u_inf
+#     y, z, x = np.meshgrid(data.grid.y, data.grid.z, xx)
+#     new_x_grid_spacing = dt*average_field[:, 0]
+#     x_grid = np.zeros_like(x)
+#     print(new_x_grid_spacing)
+#     for i in range(len(xx)):
+#         for k in range(len(data.grid.z)):
+#             x_grid[:, k, i] = i*new_x_grid_spacing[k]
+
+x_grid = time*u_inf
 if args.paraview:
-    xx = time*u_inf
     # grid
-    y, z, x = np.meshgrid(data.grid.y, data.grid.z, xx)
+    y, z, x = np.meshgrid(y_grid, z_grid, x_grid)
     # import pdb; pdb.set_trace()
     points = np.zeros((y.size, 3))
     out_velocity = np.zeros((y.size, 3))
@@ -70,14 +135,17 @@ if args.paraview:
         for j in range(y.shape[0]):
             for k in range(y.shape[1]):
                 points[counter, :] = [x[j, k, i], y[j, k, i], z[j, k, i]]
-                out_velocity[counter, :] = velocity[:, j, k, i] - [u_inf, 0, 0]
+                out_velocity[counter, :] = velocity[:, j, k, i]
                 counter += 1
     sg = tvtk.StructuredGrid(dimensions=x.shape, points=points)
     sg.point_data.vectors = out_velocity
     sg.point_data.vectors.name = 'velocity'
-    write_data(sg, filename)
+    print('Writing paraview file to... ', out_filename + '.vts')
+    write_data(sg, out_filename)
+    print('\tOK')
 
-with h5.File(filename + '.h5', 'w') as f:
+print('Writing HDF5 file to... ', out_filename + '.h5')
+with h5.File(out_filename + '.h5', 'w') as f:
     # time vector
     dset = f.create_dataset("time", data=time)
     dset.attrs['unit'] = 's'
@@ -86,9 +154,11 @@ with h5.File(filename + '.h5', 'w') as f:
     dset = f.create_dataset('dimensions', data=dimensions)
     dset.attrs['variables'] = 'dim, y, z, t'
     # grid
-    dset = f.create_dataset('y_grid', data=data.grid.y)
+    dset = f.create_dataset('x_grid', data=x_grid)
     dset.attrs['unit'] = 'm'
-    dset = f.create_dataset('z_grid', data=data.grid.z)
+    dset = f.create_dataset('y_grid', data=y_grid)
+    dset.attrs['unit'] = 'm'
+    dset = f.create_dataset('z_grid', data=z_grid)
     dset.attrs['unit'] = 'm'
     # data group
     datagroup = f.create_group('data')
@@ -98,3 +168,8 @@ with h5.File(filename + '.h5', 'w') as f:
     # uhub
     dset = f.create_dataset('u_inf', data=u_inf)
     dset = f.create_dataset('ref_height', data=ref_height)
+print('\tOK')
+
+if args.output_profile:
+    # keep plots open
+    plt.show()
