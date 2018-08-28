@@ -126,16 +126,18 @@ if args.coarsen:
 x_grid = time*u_inf
 if args.paraview:
     # grid
-    y, z, x = np.meshgrid(y_grid, z_grid, x_grid)
+    y, z, x = np.meshgrid(y_grid, z_grid, x_grid, indexing='xy')
     # import pdb; pdb.set_trace()
     points = np.zeros((y.size, 3))
     out_velocity = np.zeros((y.size, 3))
     counter = 0
+    # probably can be done with a 1D pointer
     for i in range(y.shape[2]):
-        for j in range(y.shape[0]):
-            for k in range(y.shape[1]):
-                points[counter, :] = [x[j, k, i], y[j, k, i], z[j, k, i]]
-                out_velocity[counter, :] = velocity[:, j, k, i]
+        for j in range(y.shape[1]):
+            for k in range(y.shape[0]):
+                # points[counter, :] = [x[j, k, i], y[j, k, i], z[j, k, i]]
+                points[counter, :] = [x[k, j, i], y[k, j, i], z[k, j, i]]
+                out_velocity[counter, :] = velocity[:, k, j, i]
                 counter += 1
     sg = tvtk.StructuredGrid(dimensions=x.shape, points=points)
     sg.point_data.vectors = out_velocity
@@ -152,7 +154,7 @@ with h5.File(out_filename + '.h5', 'w') as f:
     # dimensions
     dimensions = np.array(velocity.shape)
     dset = f.create_dataset('dimensions', data=dimensions)
-    dset.attrs['variables'] = 'dim, y, z, t'
+    dset.attrs['variables'] = 'dim, z, y, x'
     # grid
     dset = f.create_dataset('x_grid', data=x_grid)
     dset.attrs['unit'] = 'm'
