@@ -6,6 +6,8 @@ import sys
 from tvtk.api import tvtk, write_data
 import h5py as h5
 import os
+import json
+from lxml import etree
 """
 see
 http://lkilcher.github.io/pyTurbSim/api/pyts.html?highlight=tsdata#pyts.main.tsdata
@@ -40,36 +42,81 @@ def reduce_vector(vec):
     new_vec = vec[::2].copy()
     return new_vec
 
-parser = argparse.ArgumentParser(prog='bts2h5', description=
-"""This script converts a turbsim .btl file into a compressed hdf5 file.\n
+def read_btl(file):
+    print('Reading btl file...', filename + '.btl')
+    data = tsread.turbsim(filename + '.btl')
+    print('\tOK')
+    print('Reading inp file...', filename + '.inp')
+    input_data = read_input(filename + '.inp')
+    print('\tOK')
+    return data, input_data
+
+# def read_binary(file):
+#     # read header file
+#     header = None
+#     with open(file) as f:
+#         header = json.load(f)
+#
+#     data = struct()
+#     data.l = header['l']
+#     data.n = header['n']
+#     data.d = header['d']
+#     # read velocity files
+#     file = header['files']['ux']
+#     with open(file, 'rb') as f:
+#         ux = np.fromfile(f, dtype=np.float64)
+#         data.u = ux.reshape((data.n[0], data.n[1], data.n[2]), order='F')
+#     file = header['files']['uy']
+#     with open(file, 'rb') as f:
+#         uy = np.fromfile(f, dtype=np.float64)
+#         data.v = uy.reshape((data.n[0], data.n[1], data.n[2]), order='F')
+#     file = header['files']['uz']
+#     with open(file, 'rb') as f:
+#         uz = np.fromfile(f, dtype=np.float64)
+#         data.w = uz.reshape((data.n[0], data.n[1], data.n[2]), order='F')
+#
+#     data.velocity = np.zeros((3, data.n[2], data.n[1], data.n[0]))
+#     data.velocity[0, ...] = np.swapaxes(data.u, 0, 2)
+#     data.velocity[1, ...] = np.swapaxes(data.v, 0, 2)
+#     data.velocity[2, ...] = np.swapaxes(data.w, 0, 2)
+#     return data
+
+parser = argparse.ArgumentParser(prog='btsh5', description=
+"""This script converts a turbsim .bts file or binary turbulence into a compressed hdf5 file.\n
 Paraview output is also supported.\n
 Alfonso del Carre. \n
 Imperial College London 2018""")
-parser.add_argument('filename', help='path to the bts file to be converted', type=str)
+parser.add_argument('filename', help='path to the file to be converted', type=str)
 parser.add_argument('-o', '--output', help='output file path and name (extension will be disregarded)', type=str, default='', const='', nargs='?')
 parser.add_argument('-p', '--paraview', help='enables Paraview output', action='store_true')
 parser.add_argument('--output_profile', help='plot in matplotlib the average velocity profile', action='store_true')
 parser.add_argument('-c', '--coarsen', help='coarsen the mesh by a factor', type=int, default=0, const=0, nargs='?')
-# parser.add_argument('-s', '--scale', help='scale the velocity field based on mean velocity', action='store_true')
+parser.add_argument('-d', '--hdf5', help='generation of custom HDF5 file', action='store_false')
+parser.add_argument('-x', '--xdmf', help='generation of XDMF file', action='store_true')
 args = parser.parse_args()
 
 filename = os.path.splitext(args.filename)[0]
+extension = os.path.splitext(args.filename)[-1]
 if not args.output == '':
     out_filename = os.path.splitext(args.output)[0]
 else:
     out_filename = filename
+
+base_name = os.path.basename(out_filename)
+out_dir_name = os.path.dirname(out_filename)
+
 
 blockPrint()
 #TODO generalise
 # sys.path.append('/home/ad214/Desktop/untitled\ folder/pyTurbSim')
 import pyts.io.read as tsread
 enablePrint()
-print('Reading btl file...', filename + '.btl')
-data = tsread.turbsim(filename + '.btl')
-print('\tOK')
-print('Reading inp file...', filename + '.inp')
-input_data = read_input(filename + '.inp')
-print('\tOK')
+
+if extension == '.bts':
+    data, input_data = read_btl(filename)
+else:
+    raise Exception('Not correct file type')
+
 
 # velocity matrix
 velocity = data.utotal
@@ -82,6 +129,15 @@ ref_height = float(input_data['RefHt'])
 
 y_grid = data.grid.y
 z_grid = data.grid.z
+
+if args.coarsen:
+    for i_coarse in range(args.coarsen):
+        print('Coarsening mesh... ',  str(i_coarse + 1))
+        time = reduce_vector(time)
+        y_grid = reduce_vector(y_grid)
+        z_grid = reduce_vector(z_grid)
+        velocity = reduce_4dmatrix(velocity)
+        print('Dimensions: ', velocity.shape)
 
 # calculate average field
 if args.output_profile:
@@ -102,26 +158,6 @@ if args.output_profile:
     plt.ylabel('height [m]')
     plt.grid(True)
     plt.draw()
-
-if args.coarsen:
-    for i_coarse in range(args.coarsen):
-        print('Coarsening mesh... ',  str(i_coarse + 1))
-        time = reduce_vector(time)
-        y_grid = reduce_vector(y_grid)
-        z_grid = reduce_vector(z_grid)
-        velocity = reduce_4dmatrix(velocity)
-        print('Dimensions: ', velocity.shape)
-
-# # convect the grid as a function of the average profile
-# if args.scale:
-#     xx = time*u_inf
-#     y, z, x = np.meshgrid(data.grid.y, data.grid.z, xx)
-#     new_x_grid_spacing = dt*average_field[:, 0]
-#     x_grid = np.zeros_like(x)
-#     print(new_x_grid_spacing)
-#     for i in range(len(xx)):
-#         for k in range(len(data.grid.z)):
-#             x_grid[:, k, i] = i*new_x_grid_spacing[k]
 
 x_grid = time*u_inf
 if args.paraview:
@@ -146,31 +182,144 @@ if args.paraview:
     write_data(sg, out_filename)
     print('\tOK')
 
-print('Writing HDF5 file to... ', out_filename + '.h5')
-with h5.File(out_filename + '.h5', 'w') as f:
-    # time vector
-    dset = f.create_dataset("time", data=time)
-    dset.attrs['unit'] = 's'
-    # dimensions
-    dimensions = np.array(velocity.shape)
-    dset = f.create_dataset('dimensions', data=dimensions)
-    dset.attrs['variables'] = 'dim, z, y, x'
+dimensions = np.array(velocity.shape)
+# if args.hdf5:
+    # print('Writing HDF5 file to... ', out_filename + '.h5')
+    # with h5.File(out_filename + '.h5', 'w') as f:
+        # # time vector
+        # dset = f.create_dataset("time", data=time)
+        # dset.attrs['unit'] = 's'
+        # # dimensions
+        # dset = f.create_dataset('dimensions', data=dimensions)
+        # dset.attrs['variables'] = 'dim, z, y, x'
+        # # grid
+        # dset = f.create_dataset('x_grid', data=x_grid)
+        # dset.attrs['unit'] = 'm'
+        # dset = f.create_dataset('y_grid', data=y_grid)
+        # dset.attrs['unit'] = 'm'
+        # dset = f.create_dataset('z_grid', data=z_grid)
+        # dset.attrs['unit'] = 'm'
+        # # data group
+        # datagroup = f.create_group('data')
+        # # velocity
+        # dset = datagroup.create_dataset('velocity', data=velocity, compression='gzip')
+        # dset.attrs['unit'] = 'm/s'
+        # # uhub
+        # dset = f.create_dataset('u_inf', data=u_inf)
+        # dset = f.create_dataset('ref_height', data=ref_height)
+    # print('\tOK')
+
+import pdb; pdb.set_trace()
+dimensions = np.array(velocity.shape[1:])
+dimensions[1], dimensions[0] = dimensions[0], dimensions[1]
+if args.xdmf:
+
+    def write_grid_dim(grid, grid_name, u_names, u_file_names, dimensions):
+        ggrid = etree.SubElement(grid, 'Grid',
+                                 Name=grid_name,
+                                 GridType='Uniform')
+        gg_topo = etree.SubElement(ggrid, 'Topology',
+                                   Reference='/Xdmf/Domain/Topology[1]')
+        gg_geom = etree.SubElement(ggrid, 'Geometry',
+                                   Reference='/Xdmf/Domain/Geometry[1]')
+        for i, u_name in enumerate(u_names):
+            import pdb; pdb.set_trace()
+            attr = etree.SubElement(ggrid, 'Attribute',
+                                    Name=u_name,
+                                    Center='Node')
+            data = etree.SubElement(attr, 'DataItem',
+                                    Format='Binary',
+                                    DataType='Float',
+                                    Precision='8',
+                                    Endian='little',
+                                    Dimensions=np.array2string(dimensions, separator=' ')[1:-1])
+            data.text = u_file_names[i] + grid_name
+
+    def write_binary(xdmf_files, data, grid_name='0', route='./'):
+        dimensions = np.array(data.shape[1:])
+        print(dimensions)
+
+        # need to convert to data to turbulence FoR (y up)
+        vx_y =  data[0, ...].copy(order='F')
+        vy_y =  data[2, ...].copy(order='F')
+        vz_y = -data[1, ...].copy(order='F')
+
+        vx_y = np.reshape(vx_y, newshape=(dimensions[1], dimensions[0], dimensions[2]), order='F')
+        vy_y = np.reshape(vy_y, newshape=(dimensions[1], dimensions[0], dimensions[2]), order='F')
+        vz_y = np.reshape(vz_y, newshape=(dimensions[1], dimensions[0], dimensions[2]), order='F')
+
+        print('Writing ', route + '/' + xdmf_files[0] + grid_name, '...')
+        np.ravel(vx_y).astype(np.float64).tofile(route + '/' + xdmf_files[0] + grid_name)
+        print('Writing ', route + '/' + xdmf_files[1] + grid_name, '...')
+        np.ravel(vy_y).astype(np.float64).tofile(route + '/' + xdmf_files[1] + grid_name)
+        print('Writing ', route + '/' + xdmf_files[2] + grid_name, '...')
+        np.ravel(vz_y).astype(np.float64).tofile(route + '/' + xdmf_files[2] + grid_name)
+
+    grid_name = '0'
+    vel_names = ['ux', 'uy', 'uz']
+    xdmf_names = ['ux', 'uy', 'uz']
+    for i, name in enumerate(xdmf_names):
+        xdmf_names[i] = base_name + '_' + name
+
+    root = etree.Element('Domain')
+
+    # Dimensions string:
+    dim_string = ''
+    for dim in dimensions:
+        dim_string += str(dim) + '     '
+
+    print(dim_string)
+
+    topology = etree.SubElement(root, 'Topology',
+                          name='topo',
+                          TopologyType='3DCoRectMesh',
+                          Dimensions=dim_string)
+
+    # Geometry
+    geometry = etree.SubElement(root, 'Geometry',
+                                name='geo',
+                                Type='ORIGIN_DXDYDZ')
+    origin = etree.SubElement(geometry, 'DataItem',
+                              Format='XML',
+                              Dimensions='3')
+    origin.text = '0.0 0.0 0.0'
+
+    # spacing of the grid
+    dxdydz_vec = np.array([y_grid[1] - y_grid[0],
+                           z_grid[1] - z_grid[0],
+                           x_grid[1] - x_grid[0]])
+
+    dxdydz= etree.SubElement(geometry, 'DataItem',
+                              Format='XML',
+                              Dimensions='3')
+    dxdydz.text = np.array2string(dxdydz_vec, separator=' ')[1:-1]
+
     # grid
-    dset = f.create_dataset('x_grid', data=x_grid)
-    dset.attrs['unit'] = 'm'
-    dset = f.create_dataset('y_grid', data=y_grid)
-    dset.attrs['unit'] = 'm'
-    dset = f.create_dataset('z_grid', data=z_grid)
-    dset.attrs['unit'] = 'm'
-    # data group
-    datagroup = f.create_group('data')
-    # velocity
-    dset = datagroup.create_dataset('velocity', data=velocity, compression='gzip')
-    dset.attrs['unit'] = 'm/s'
-    # uhub
-    dset = f.create_dataset('u_inf', data=u_inf)
-    dset = f.create_dataset('ref_height', data=ref_height)
-print('\tOK')
+    grid = etree.SubElement(root, 'Grid',
+                            Name='Timeseries',
+                            GridType='Collection',
+                            CollectionType='Temporal')
+    time = etree.SubElement(grid, 'Time',
+                            TimeType='HyperSlab')
+    time_item = etree.SubElement(time, 'DataItem',
+                                 Format='XML',
+                                 NumberType='Float',
+                                 Dimensions='3')
+    time_item.text = '0.0 1.0'
+
+    write_grid_dim(grid, grid_name, vel_names, xdmf_names, dimensions)
+
+    # now binary files
+    write_binary(xdmf_names, velocity, route=out_dir_name)
+
+
+    with open(out_filename + '.xdmf', 'w') as f:
+        print('Writing xdmf file to... ', out_filename + '.xdmf')
+        f.write(r'<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>' + '\n')
+        f.write(r'<Xdmf xmlns:xi="http://www.w3.org/2001/XInclude" Version="2.0">' + '\n')
+        f.write((etree.tostring(root, pretty_print=True, encoding='unicode')))
+        f.write(r'</Xdmf>')
+    print('\tOK')
 
 if args.output_profile:
     # keep plots open
