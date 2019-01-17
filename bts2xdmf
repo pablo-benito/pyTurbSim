@@ -42,9 +42,9 @@ def reduce_vector(vec):
     new_vec = vec[::2].copy()
     return new_vec
 
-def read_btl(file):
-    print('Reading btl file...', filename + '.btl')
-    data = tsread.turbsim(filename + '.btl')
+def read_bts(file):
+    print('Reading bts file...', filename + '.bts')
+    data = tsread.turbsim(filename + '.bts')
     print('\tOK')
     print('Reading inp file...', filename + '.inp')
     input_data = read_input(filename + '.inp')
@@ -81,8 +81,8 @@ def read_btl(file):
 #     data.velocity[2, ...] = np.swapaxes(data.w, 0, 2)
 #     return data
 
-parser = argparse.ArgumentParser(prog='btsh5', description=
-"""This script converts a turbsim .bts file or binary turbulence into a compressed hdf5 file.\n
+parser = argparse.ArgumentParser(prog='bts2xdmf', description=
+"""This script converts a turbsim .bts file into a XDMF file.\n
 Paraview output is also supported.\n
 Alfonso del Carre. \n
 Imperial College London 2018""")
@@ -91,7 +91,7 @@ parser.add_argument('-o', '--output', help='output file path and name (extension
 parser.add_argument('-p', '--paraview', help='enables Paraview output', action='store_true')
 parser.add_argument('--output_profile', help='plot in matplotlib the average velocity profile', action='store_true')
 parser.add_argument('-c', '--coarsen', help='coarsen the mesh by a factor', type=int, default=0, const=0, nargs='?')
-parser.add_argument('-d', '--hdf5', help='generation of custom HDF5 file', action='store_false')
+# parser.add_argument('-d', '--hdf5', help='generation of custom HDF5 file', action='store_false')
 parser.add_argument('-x', '--xdmf', help='generation of XDMF file', action='store_true')
 args = parser.parse_args()
 
@@ -103,7 +103,7 @@ else:
     out_filename = filename
 
 base_name = os.path.basename(out_filename)
-out_dir_name = os.path.dirname(out_filename)
+out_dir_name = os.path.dirname(os.path.abspath(out_filename))
 
 
 blockPrint()
@@ -113,7 +113,7 @@ import pyts.io.read as tsread
 enablePrint()
 
 if extension == '.bts':
-    data, input_data = read_btl(filename)
+    data, input_data = read_bts(filename)
 else:
     raise Exception('Not correct file type')
 
@@ -209,7 +209,6 @@ dimensions = np.array(velocity.shape)
         # dset = f.create_dataset('ref_height', data=ref_height)
     # print('\tOK')
 
-import pdb; pdb.set_trace()
 dimensions = np.array(velocity.shape[1:])
 dimensions[1], dimensions[0] = dimensions[0], dimensions[1]
 if args.xdmf:
@@ -223,7 +222,6 @@ if args.xdmf:
         gg_geom = etree.SubElement(ggrid, 'Geometry',
                                    Reference='/Xdmf/Domain/Geometry[1]')
         for i, u_name in enumerate(u_names):
-            import pdb; pdb.set_trace()
             attr = etree.SubElement(ggrid, 'Attribute',
                                     Name=u_name,
                                     Center='Node')
@@ -237,7 +235,6 @@ if args.xdmf:
 
     def write_binary(xdmf_files, data, grid_name='0', route='./'):
         dimensions = np.array(data.shape[1:])
-        print(dimensions)
 
         # need to convert to data to turbulence FoR (y up)
         vx_y =  data[0, ...].copy(order='F')
@@ -268,7 +265,6 @@ if args.xdmf:
     for dim in dimensions:
         dim_string += str(dim) + '     '
 
-    print(dim_string)
 
     topology = etree.SubElement(root, 'Topology',
                           name='topo',
