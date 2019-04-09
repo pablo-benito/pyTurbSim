@@ -45,6 +45,7 @@ def reduce_vector(vec):
 def read_bts(file):
     print('Reading bts file...', filename + '.bts')
     data = tsread.turbsim(filename + '.bts')
+    # import pdb; pdb.set_trace()
     print('\tOK')
     print('Reading inp file...', filename + '.inp')
     input_data = read_input(filename + '.inp')
@@ -131,7 +132,6 @@ x_grid = time*u_inf
 if args.paraview:
     # grid
     y, z, x = np.meshgrid(y_grid, z_grid, x_grid, indexing='xy')
-    # import pdb; pdb.set_trace()
     points = np.zeros((y.size, 3))
     out_velocity = np.zeros((y.size, 3))
     counter = 0
@@ -139,7 +139,6 @@ if args.paraview:
     for i in range(y.shape[2]):
         for j in range(y.shape[1]):
             for k in range(y.shape[0]):
-                # points[counter, :] = [x[j, k, i], y[j, k, i], z[j, k, i]]
                 points[counter, :] = [x[k, j, i], y[k, j, i], z[k, j, i]]
                 out_velocity[counter, :] = velocity[:, k, j, i]
                 counter += 1
@@ -177,13 +176,29 @@ if args.xdmf:
         # dimensions[1], dimensions[0] = dimensions[0], dimensions[1]
 
         # need to convert to data to turbulence FoR (y up)
+        # import pdb; pdb.set_trace()
         vx_y =  data[0, ...].copy(order='F')
         vy_y =  data[1, ...].copy(order='F')
         vz_y =  data[2, ...].copy(order='F')
+        dimensions = np.array(vx_y.shape)
+        print(dimensions)
 
-        vx_y = np.reshape(vx_y, newshape=(dimensions[0], dimensions[1], dimensions[2]), order='F')
-        vy_y = np.reshape(vy_y, newshape=(dimensions[0], dimensions[1], dimensions[2]), order='F')
-        vz_y = np.reshape(vz_y, newshape=(dimensions[0], dimensions[1], dimensions[2]), order='F')
+        # import matplotlib.pyplot as plt
+        # snaps = [0, 3, 5]
+        # for snap in snaps:
+            # plt.figure()
+            # plt.title(str(snap))
+            # plt.contourf(x_grid, z_grid, vx_y[: , snap, :])
+            # plt.xlabel('x')
+            # plt.ylabel('z')
+            # plt.colorbar()
+
+        # plt.show()
+        # v._y here has the order: y z x
+
+        # vx_y = np.reshape(vx_y, newshape=(dimensions[2], dimensions[1], dimensions[0]), order='F')
+        # vy_y = np.reshape(vy_y, newshape=(dimensions[2], dimensions[1], dimensions[0]), order='F')
+        # vz_y = np.reshape(vz_y, newshape=(dimensions[2], dimensions[1], dimensions[0]), order='F')
 
         print('Writing ', route + '/' + xdmf_files[0] + grid_name, '...')
         np.ravel(vx_y).astype(np.float64).tofile(route + '/' + xdmf_files[0] + grid_name)
@@ -225,7 +240,14 @@ if args.xdmf:
                            y_grid[1] - y_grid[0],
                            x_grid[1] - x_grid[0]])
 
-    print('dy, dz, dx = ', dxdydz_vec)
+    # origin.text = str(z_grid[0]) + ' ' + str(x_grid[0]) + ' ' + str(y_grid[0])
+
+    # # spacing of the grid
+    # dxdydz_vec = np.array([z_grid[1] - z_grid[0],
+                           # x_grid[1] - x_grid[0],
+                           # y_grid[1] - y_grid[0]])
+
+    print('dz, dy, dx = ', dxdydz_vec)
     dxdydz= etree.SubElement(geometry, 'DataItem',
                               Format='XML',
                               Dimensions='3')
