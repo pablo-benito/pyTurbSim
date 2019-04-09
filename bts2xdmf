@@ -51,36 +51,6 @@ def read_bts(file):
     print('\tOK')
     return data, input_data
 
-# def read_binary(file):
-#     # read header file
-#     header = None
-#     with open(file) as f:
-#         header = json.load(f)
-#
-#     data = struct()
-#     data.l = header['l']
-#     data.n = header['n']
-#     data.d = header['d']
-#     # read velocity files
-#     file = header['files']['ux']
-#     with open(file, 'rb') as f:
-#         ux = np.fromfile(f, dtype=np.float64)
-#         data.u = ux.reshape((data.n[0], data.n[1], data.n[2]), order='F')
-#     file = header['files']['uy']
-#     with open(file, 'rb') as f:
-#         uy = np.fromfile(f, dtype=np.float64)
-#         data.v = uy.reshape((data.n[0], data.n[1], data.n[2]), order='F')
-#     file = header['files']['uz']
-#     with open(file, 'rb') as f:
-#         uz = np.fromfile(f, dtype=np.float64)
-#         data.w = uz.reshape((data.n[0], data.n[1], data.n[2]), order='F')
-#
-#     data.velocity = np.zeros((3, data.n[2], data.n[1], data.n[0]))
-#     data.velocity[0, ...] = np.swapaxes(data.u, 0, 2)
-#     data.velocity[1, ...] = np.swapaxes(data.v, 0, 2)
-#     data.velocity[2, ...] = np.swapaxes(data.w, 0, 2)
-#     return data
-
 parser = argparse.ArgumentParser(prog='bts2xdmf', description=
 """This script converts a turbsim .bts file into a XDMF file.\n
 Paraview output is also supported.\n
@@ -107,8 +77,6 @@ out_dir_name = os.path.dirname(os.path.abspath(out_filename))
 
 
 blockPrint()
-#TODO generalise
-# sys.path.append('/home/ad214/Desktop/untitled\ folder/pyTurbSim')
 import pyts.io.read as tsread
 enablePrint()
 
@@ -182,37 +150,8 @@ if args.paraview:
     write_data(sg, out_filename)
     print('\tOK')
 
-dimensions = np.array(velocity.shape)
-# if args.hdf5:
-    # print('Writing HDF5 file to... ', out_filename + '.h5')
-    # with h5.File(out_filename + '.h5', 'w') as f:
-        # # time vector
-        # dset = f.create_dataset("time", data=time)
-        # dset.attrs['unit'] = 's'
-        # # dimensions
-        # dset = f.create_dataset('dimensions', data=dimensions)
-        # dset.attrs['variables'] = 'dim, z, y, x'
-        # # grid
-        # dset = f.create_dataset('x_grid', data=x_grid)
-        # dset.attrs['unit'] = 'm'
-        # dset = f.create_dataset('y_grid', data=y_grid)
-        # dset.attrs['unit'] = 'm'
-        # dset = f.create_dataset('z_grid', data=z_grid)
-        # dset.attrs['unit'] = 'm'
-        # # data group
-        # datagroup = f.create_group('data')
-        # # velocity
-        # dset = datagroup.create_dataset('velocity', data=velocity, compression='gzip')
-        # dset.attrs['unit'] = 'm/s'
-        # # uhub
-        # dset = f.create_dataset('u_inf', data=u_inf)
-        # dset = f.create_dataset('ref_height', data=ref_height)
-    # print('\tOK')
-
 dimensions = np.array(velocity.shape[1:])
-dimensions[1], dimensions[0] = dimensions[0], dimensions[1]
 if args.xdmf:
-
     def write_grid_dim(grid, grid_name, u_names, u_file_names, dimensions):
         ggrid = etree.SubElement(grid, 'Grid',
                                  Name=grid_name,
@@ -235,15 +174,16 @@ if args.xdmf:
 
     def write_binary(xdmf_files, data, grid_name='0', route='./'):
         dimensions = np.array(data.shape[1:])
+        # dimensions[1], dimensions[0] = dimensions[0], dimensions[1]
 
         # need to convert to data to turbulence FoR (y up)
         vx_y =  data[0, ...].copy(order='F')
-        vy_y =  data[2, ...].copy(order='F')
-        vz_y = -data[1, ...].copy(order='F')
+        vy_y =  data[1, ...].copy(order='F')
+        vz_y =  data[2, ...].copy(order='F')
 
-        vx_y = np.reshape(vx_y, newshape=(dimensions[1], dimensions[0], dimensions[2]), order='F')
-        vy_y = np.reshape(vy_y, newshape=(dimensions[1], dimensions[0], dimensions[2]), order='F')
-        vz_y = np.reshape(vz_y, newshape=(dimensions[1], dimensions[0], dimensions[2]), order='F')
+        vx_y = np.reshape(vx_y, newshape=(dimensions[0], dimensions[1], dimensions[2]), order='F')
+        vy_y = np.reshape(vy_y, newshape=(dimensions[0], dimensions[1], dimensions[2]), order='F')
+        vz_y = np.reshape(vz_y, newshape=(dimensions[0], dimensions[1], dimensions[2]), order='F')
 
         print('Writing ', route + '/' + xdmf_files[0] + grid_name, '...')
         np.ravel(vx_y).astype(np.float64).tofile(route + '/' + xdmf_files[0] + grid_name)
@@ -278,13 +218,14 @@ if args.xdmf:
     origin = etree.SubElement(geometry, 'DataItem',
                               Format='XML',
                               Dimensions='3')
-    origin.text = '0.0 0.0 0.0'
+    origin.text = str(z_grid[0]) + ' ' + str(y_grid[0]) + ' ' + str(x_grid[0])
 
     # spacing of the grid
-    dxdydz_vec = np.array([y_grid[1] - y_grid[0],
-                           z_grid[1] - z_grid[0],
+    dxdydz_vec = np.array([z_grid[1] - z_grid[0],
+                           y_grid[1] - y_grid[0],
                            x_grid[1] - x_grid[0]])
 
+    print('dy, dz, dx = ', dxdydz_vec)
     dxdydz= etree.SubElement(geometry, 'DataItem',
                               Format='XML',
                               Dimensions='3')
