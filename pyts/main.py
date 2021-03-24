@@ -14,7 +14,7 @@ from pyts.specModels.base import specModelBase, specObj
 from pyts.cohereModels.base import cohereModelBase, cohereObj, cohereUser
 from pyts.stressModels.base import stressModelBase, stressObj
 from pyts.phaseModels.api import randPhase
-import _version as ver
+from pyts import _version as ver
 from pyts.io import write
 from numpy import random
 from numpy import ulonglong
