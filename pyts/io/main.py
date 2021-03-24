@@ -4,7 +4,7 @@ function, which is useful for collecting information from available
 TurbSim input/output files.
 """
 
-import pyts.io.read
+from pyts.io import read
 
 readers = {'wnd': read.bladed,
            'bl': read.bladed,
@@ -31,7 +31,7 @@ def readModel(fname, ):
              The TurbSim data contained in the binary data file.
     """
 
-    for sfx, rdr in readers.iteritems():
+    for sfx, rdr in readers.items():
         if fname.endswith(sfx):
             return rdr(fname)
 
