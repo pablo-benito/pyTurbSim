@@ -22,7 +22,7 @@ def bladed(fname,):
 
     """
     fname = checkname(fname, ['.wnd', '.bl'])
-    with file(fname, 'rb') as fl:
+    with open(fname, 'rb') as fl:
         junk, nffc, ncomp, lat, z0, center = unpack(e + '2hl3f', fl.read(20))
         if junk != -99 or nffc != 4:
             raise IOError("The file %s does not appear to be a valid 'bladed (.bts)' format file."
